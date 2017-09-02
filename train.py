@@ -12,18 +12,22 @@ import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 from torch.autograd import Variable
 from collections import OrderedDict
+import pandas as pd
 
 from densenet import densenet121
 
 def main(args):
 
     transform_train = transforms.Compose([
-        transforms.scale(args.image_size),
+        transforms.Scale(args.image_size),
         transforms.ToTensor()
         ])
 
-    train_set = ImageFolder(args.data_dir,
-            transform=transform_train)
+    anno = pd.read_csv(args.anno_txt, header=None)
+
+
+    train_set = SiameseData(args.data_dir, image_paths0,
+            image_paths1, targets, transform=transform_train)
     train_loader = Dataloader(train_set, batch_size=
             args.batch_size,
             shuffle=True)

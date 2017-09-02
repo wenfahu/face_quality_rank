@@ -26,14 +26,15 @@ def default_loader(path):
         return pil_loader(path)
 
 class SiameseData(Dataset):
-    def __init__(self, transform=None, image_paths0, image_paths1, labels, loader=default_laoder):
+    def __init__(self, root, image_paths0, image_paths1, labels, transform=None, loader=default_loader):
         self.image_pairs =zip(image_paths0, image_paths1)
         self.labels = labels
+        self.loader = loader
 
     def __getitem__(self, index):
         path0, path1 = self.image_pairs[index]
-        img0 = self.loader(path0)
-        img1 = self.loader(path1)
+        img0 = self.loader(os.path.join(root, path0))
+        img1 = self.loader(os.path.join(root, path1))
         if self.transform is not None:
             img0 = self.transform(img0)
             img1 = self.transform(img1)

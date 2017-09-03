@@ -148,10 +148,13 @@ class DenseNet(nn.Module):
 
         # Final batch norm
         self.features.add_module('norm5', nn.BatchNorm2d(num_features))
-
+        self.fc = nn.Conv2d(num_features, 1, kernel_size=1, bias=False)
+        self.prob = nn.Sigmoid()
 
     def forward(self, x):
         features = self.features(x)
         out = F.relu(features, inplace=True)
         out = F.avg_pool2d(out, kernel_size=out.size(-1)).view(features.size(0), -1)
+        out = self.fc(out)
+        out = self.prob(out)
         return out

@@ -13,8 +13,12 @@ from torchvision.datasets import ImageFolder
 from torch.autograd import Variable
 from collections import OrderedDict
 import pandas as pd
+from visdom import Visdom
 
 from densenet import densenet121
+from rank_loss import RankLoss
+
+
 
 def main(args):
 
@@ -24,6 +28,12 @@ def main(args):
         ])
 
     anno = pd.read_csv(args.anno_txt, header=None)
+    image_paths0 = list(anno.ix[:, 1])
+    image_paths1 = list(anno.ix[:, 2])
+    targets = np.array(anno.ix[:,-1])
+    targets = np.sign(targets - 3)
+    global plotter 
+    plotter = VisdomLinePlotter(env_name=args.name)
 
 
     train_set = SiameseData(args.data_dir, image_paths0,
@@ -49,10 +59,77 @@ def main(args):
     cudnn.benchmark = True
     optimizer = torch.optim.Adam(model.parameters(), args.lr,
             weight_decay=args.weight_decay)
-
+    criterion = RankLoss()
     for epoch in range(args.epoch):
         # adjust learning rate
+        train(train_loader, model, criterion, optimizer, epoch)
+        save_ckpt(model, args.training_dir, epoch)
 
+def save_ckpt(model, train_dir, epoch):
+    filename = os.path.join(train_dir, 'checkpoint.t7'))
+    state = {
+            'epoch': epoch,
+            'state': model.state_dict()
+            }
+    torch.save(state, filename)
+
+
+def train(train_loader, model, criterion, optimizer, epoch):
+    losses = AverageMeter()
+    model.train()
+    for idx, (x0, x1, t) in enumerate(train_loader):
+        target = target.cuda(async=True)
+        x0 = x0.cuda()
+        x1 = x1.cuda()
+        x0_var = Variable(x0)
+        x1_var = Variable(x1)
+        target_var = Variable(target)
+        y0 = model(x0_var)
+        y1 = model(x1_var)
+        loss = criterion(y0, y1, target_var)
+        losses.update(loss.data[0], x0_var.size(0))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        if idx % 10 == 0:
+            print('Epoch: [{0}][{1}/{2}]\t'
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
+                      epoch, i, len(train_loader), loss=losses))
+    plotter.plot('loss', 'train', epoch, losses.avg)
+
+class VisdomLinePlotter(object):
+    """Plots to Visdom"""
+    def __init__(self, env_name='main'):
+        self.viz = Visdom()
+        self.env = env_name
+        self.plots = {}
+    def plot(self, var_name, split_name, x, y):
+        if var_name not in self.plots:
+            self.plots[var_name] = self.viz.line(X=np.array([x,x]), Y=np.array([y,y]), env=self.env, opts=dict(
+                legend=[split_name],
+                title=var_name,
+                xlabel='Epochs',
+                ylabel=var_name
+            ))
+        else:
+            self.viz.updateTrace(X=np.array([x]), Y=np.array([y]), env=self.env, win=self.plots[var_name], name=split_name)
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -64,6 +141,8 @@ if __name__=='__main__':
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--drop_rate', type=float, default=0.2)
     parser.add_argument('--epoch', type=int, default=200)
+    parser.add_argument('--anno_txt')
+    parser.add_argument('--name', default="ranknet")
 
     args = parser.parse_args()
     main(args)

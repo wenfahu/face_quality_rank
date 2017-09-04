@@ -33,8 +33,8 @@ def main(args):
     image_paths1 = list(anno.ix[:, 2])
     targets = np.array(anno.ix[:,3])
     targets = np.sign(targets - 3)
-    # global plotter 
-    # plotter = VisdomLinePlotter(env_name=args.name)
+    global plotter 
+    plotter = VisdomLinePlotter(env_name=args.name)
 
 
     train_set = SiameseData(args.data_dir, image_paths0,
@@ -46,7 +46,7 @@ def main(args):
     model = densenet121(drop_rate=args.drop_rate)
     print('Number of model parameters: {}'.format(
         sum([p.data.nelement() for p in model.parameters()])))
-    # model = model.cuda()
+    model = model.cuda()
     if args.ckpt:
         if os.path.isfile(args.ckpt):
             print('loading ckpt {}'.format(args.ckpt))
@@ -80,12 +80,12 @@ def train(train_loader, model, criterion, optimizer, epoch):
     losses = AverageMeter()
     model.train()
     for idx, (x0, x1, t) in enumerate(train_loader):
-        # target = t.cuda(async=True)
-        #x0 = x0.cuda()
-        # x1 = x1.cuda()
+        target = t.cuda(async=True)
+        x0 = x0.cuda()
+        x1 = x1.cuda()
         x0_var = Variable(x0)
         x1_var = Variable(x1)
-        target_var = Variable(t)
+        target_var = Variable(target)
         y0 = model(x0_var)
         y1 = model(x1_var)
         loss = criterion(y0, y1, target_var)
@@ -97,9 +97,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
             print('Epoch: [{0}][{1}/{2}]\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
                       epoch, i, len(train_loader), loss=losses))
-    # plotter.plot('loss', 'train', epoch, losses.avg)
+    plotter.plot('loss', 'train', epoch, losses.avg)
 
-'''
 class VisdomLinePlotter(object):
     """Plots to Visdom"""
     def __init__(self, env_name='main'):
@@ -117,7 +116,6 @@ class VisdomLinePlotter(object):
         else:
             self.viz.updateTrace(X=np.array([x]), Y=np.array([y]), env=self.env, win=self.plots[var_name], name=split_name)
 
-'''
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self):
